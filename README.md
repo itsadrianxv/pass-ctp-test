@@ -1,4 +1,4 @@
-# ctp-penetration-test-kit —— 速通CTP穿透测试
+# pass_ctp_test —— 速通CTP穿透测试
 
 ## 项目综述
 
@@ -85,8 +85,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/maroonxv/ctp-penetration-test-kit.git
-cd ctp-penetration-test-kit
+git clone https://github.com/maroonxv/pass_ctp_test.git
+cd pass_ctp_test
 
 # 安装依赖
 pip install -r requirements.txt
