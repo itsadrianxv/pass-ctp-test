@@ -18,15 +18,28 @@ import engineio
 # Increase max_decode_packets to prevent "Too many packets in payload" error
 engineio.payload.Payload.max_decode_packets = 100
 
+def _load_socketio_cors_allowed_origins():
+    raw_value = os.environ.get("WEB_CORS_ALLOWED_ORIGINS", "").strip()
+    if not raw_value:
+        return None
+    if raw_value == "*":
+        return "*"
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 app = Flask(__name__)
-# Generate a random key on startup to invalidate previous sessions
-app.config['SECRET_KEY'] = os.urandom(24)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+app.config.update(
+    SECRET_KEY=config.get_web_secret_key(),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("WEB_SESSION_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+)
+socketio = SocketIO(app, cors_allowed_origins=_load_socketio_cors_allowed_origins(), async_mode='threading')
 
 setup_logger()
 
 process_manager = ProcessManager()
-rpc = RpcClient("127.0.0.1", 9999)
+rpc = RpcClient(config.RPC_HOST, config.RPC_PORT)
 
 log = logging.getLogger(__name__)
 
@@ -69,34 +82,56 @@ def get_masked_env():
     }
 
 
+def _is_logged_in() -> bool:
+    return bool(session.get("logged_in"))
+
+
+def _form_value(name: str) -> str:
+    return str(request.form.get(name, "") or "").strip()
+
+
+@app.before_request
+def _require_login():
+    if request.endpoint in {"login", "static"}:
+        return None
+    if request.path.startswith("/socket.io/"):
+        return None
+    if _is_logged_in():
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"status": "error", "msg": "authentication_required"}), 401
+    return redirect(url_for("login"))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # Get data from form
         data = {
-            'CTP_NAME': request.form.get('CTP_NAME'),
-            'CTP_USERNAME': request.form.get('CTP_USERNAME'),
-            'CTP_PASSWORD': request.form.get('CTP_PASSWORD'),
-            'CTP_BROKER_ID': request.form.get('CTP_BROKER_ID'),
-            'CTP_TD_SERVER': request.form.get('CTP_TD_SERVER'),
-            'CTP_MD_SERVER': request.form.get('CTP_MD_SERVER'),
-            'APPID': request.form.get('APPID'),
-            'CTP_AUTH_CODE': request.form.get('CTP_AUTH_CODE'),
-            'CTP_PRODUCT_INFO': request.form.get('CTP_PRODUCT_INFO', '')
+            'CTP_NAME': _form_value('CTP_NAME'),
+            'CTP_USERNAME': _form_value('CTP_USERNAME'),
+            'CTP_PASSWORD': _form_value('CTP_PASSWORD'),
+            'CTP_BROKER_ID': _form_value('CTP_BROKER_ID'),
+            'CTP_TD_SERVER': _form_value('CTP_TD_SERVER'),
+            'CTP_MD_SERVER': _form_value('CTP_MD_SERVER'),
+            'APPID': _form_value('APPID'),
+            'CTP_AUTH_CODE': _form_value('CTP_AUTH_CODE'),
+            'CTP_PRODUCT_INFO': _form_value('CTP_PRODUCT_INFO')
         }
-        
-        # Save to .env
-        config.save_env(config.ENV_PATH, data)
-        
-        # Set session
+
+        try:
+            config.save_env(config.ENV_PATH, data)
+        except ValueError as exc:
+            log.warning("Rejected invalid login payload: %s", exc)
+            return render_template('login.html', env=data, error=str(exc)), 400
+
+        session.clear()
         session['logged_in'] = True
-        
-        # Restart worker to pick up new config
+
         if process_manager.is_running():
             process_manager.restart_worker()
         else:
-            process_manager.start_worker()
-            
+            process_manager.start_worker(force=True)
+
         return redirect(url_for('index'))
         
     # GET
@@ -365,5 +400,6 @@ def worker_kill():
     return jsonify({"status": "success", "msg": "Worker 已终止"})
 
 if __name__ == '__main__':
-    # process_manager.start_worker() # Delayed until login
-    socketio.run(app, host='0.0.0.0', port=5006, debug=False)
+    web_host = os.environ.get("WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    web_port = int(os.environ.get("WEB_PORT", "5006"))
+    socketio.run(app, host=web_host, port=web_port, debug=False)

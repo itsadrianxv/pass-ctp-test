@@ -1,90 +1,142 @@
 import os
+import re
+import secrets
+import tempfile
+from typing import Any, Dict
+
 import yaml
-from typing import Dict, Any
+
+
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 
 def load_env(env_path: str) -> Dict[str, str]:
-    env_vars = {}
+    env_vars: Dict[str, str] = {}
     if not os.path.exists(env_path):
         return env_vars
-    with open(env_path, 'r', encoding='utf-8') as f:
+
+    with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
-            if '=' in line:
-                key, value = line.split('=', 1)
+            if "=" in line:
+                key, value = line.split("=", 1)
                 env_vars[key.strip()] = value.strip()
     return env_vars
+
 
 def load_yaml_config(config_path: str) -> Dict[str, Any]:
     if not os.path.exists(config_path):
         return {}
-    with open(config_path, 'r', encoding='utf-8') as f:
+
+    with open(config_path, "r", encoding="utf-8") as f:
         try:
             return yaml.safe_load(f) or {}
         except yaml.YAMLError:
             return {}
 
-# 路径配置 — 多一层 dirname 因为从 src/ 移到了 src/config/
+
+def _normalize_env_key(key: str) -> str:
+    key_text = str(key or "").strip()
+    if not _ENV_KEY_RE.fullmatch(key_text):
+        raise ValueError(f"invalid env key: {key!r}")
+    return key_text
+
+
+def _normalize_env_value(value: Any) -> str:
+    value_text = "" if value is None else str(value)
+    if "\r" in value_text or "\n" in value_text:
+        raise ValueError("env values must not contain line breaks")
+    return value_text
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+
+    fd, temp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
 CONFIG_YAML_PATH = os.path.join(PROJECT_ROOT, "config.yaml")
 
-# 加载配置
+
 ENV_VARS = load_env(ENV_PATH)
 YAML_CONFIG = load_yaml_config(CONFIG_YAML_PATH)
 
-def save_env(env_path: str, data: Dict[str, str]) -> None:
-    """更新或保存 .env 文件"""
+
+def save_env(env_path: str, data: Dict[str, Any]) -> None:
+    normalized_data = {
+        _normalize_env_key(key): _normalize_env_value(value)
+        for key, value in data.items()
+    }
+
     lines = []
     if os.path.exists(env_path):
-        with open(env_path, 'r', encoding='utf-8') as f:
+        with open(env_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
     new_lines = []
     processed_keys = set()
 
-    # 更新现有键值
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
+        if not stripped or stripped.startswith("#"):
             new_lines.append(line)
             continue
-        
-        if '=' in line:
-            key, _ = stripped.split('=', 1)
+
+        if "=" in line:
+            key, _ = stripped.split("=", 1)
             key = key.strip()
-            if key in data:
-                new_lines.append(f"{key}={data[key]}\n")
+            if key in normalized_data:
+                new_lines.append(f"{key}={normalized_data[key]}\n")
                 processed_keys.add(key)
             else:
                 new_lines.append(line)
         else:
             new_lines.append(line)
-            
-    # 添加新键值
-    for key, value in data.items():
+
+    for key, value in normalized_data.items():
         if key not in processed_keys:
-            # 如果最后一行不是换行符，先添加一个换行
-            if new_lines and not new_lines[-1].endswith('\n'):
-                new_lines.append('\n')
+            if new_lines and not new_lines[-1].endswith("\n"):
+                new_lines.append("\n")
             new_lines.append(f"{key}={value}\n")
-            
-    with open(env_path, 'w', encoding='utf-8') as f:
-        f.writelines(new_lines)
+
+    _atomic_write_text(env_path, "".join(new_lines))
+
 
 def save_yaml_config(config_path: str, data: Dict[str, Any]) -> None:
-    """更新或保存 config.yaml 文件"""
-    # 读取现有配置以保留未修改的项
     current_config = load_yaml_config(config_path)
     current_config.update(data)
-    
-    with open(config_path, 'w', encoding='utf-8') as f:
-        yaml.safe_dump(current_config, f, allow_unicode=True, default_flow_style=False)
+
+    serialized = yaml.safe_dump(current_config, allow_unicode=True, default_flow_style=False)
+    _atomic_write_text(config_path, serialized)
 
 
+def get_web_secret_key(env_path: str | None = None) -> str:
+    env_path = env_path or ENV_PATH
+    env_vars = load_env(env_path)
+    secret_key = env_vars.get("WEB_SECRET_KEY") or os.environ.get("WEB_SECRET_KEY")
+    if secret_key:
+        return secret_key
 
-# 全局常量
+    secret_key = secrets.token_hex(32)
+    save_env(env_path, {"WEB_SECRET_KEY": secret_key})
+    ENV_VARS["WEB_SECRET_KEY"] = secret_key
+    return secret_key
+
+
 CTP_NAME = ENV_VARS.get("CTP_NAME", "Unknown")
 CTP_USERNAME = ENV_VARS.get("CTP_USERNAME", "")
 CTP_BROKER_ID = ENV_VARS.get("CTP_BROKER_ID", "")
@@ -95,7 +147,7 @@ ATOMIC_WAIT_SECONDS = 7
 RPC_PORT = 9999
 RPC_HOST = "127.0.0.1"
 
-# CTP 配置
+
 CTP_SETTING = {
     "用户名": CTP_USERNAME,
     "密码": ENV_VARS.get("CTP_PASSWORD", ""),
@@ -104,10 +156,10 @@ CTP_SETTING = {
     "行情服务器": ENV_VARS.get("CTP_MD_SERVER", ""),
     "产品名称": CTP_APP_ID,
     "授权编码": CTP_AUTH_CODE,
-    "产品信息": ENV_VARS.get("CTP_PRODUCT_INFO", "")
+    "产品信息": ENV_VARS.get("CTP_PRODUCT_INFO", ""),
 }
 
-# 从 YAML 读取测试配置
+
 TEST_SYMBOL = YAML_CONFIG.get("test_symbol", "IF2602")
 SAFE_BUY_PRICE = float(YAML_CONFIG.get("safe_buy_price", 4700.0))
 DEAL_BUY_PRICE = float(YAML_CONFIG.get("deal_buy_price", 4800.0))
@@ -117,13 +169,16 @@ VOLUME_LIMIT_VOLUME = int(YAML_CONFIG.get("volume_limit_volume", 10000) or 10000
 ORDER_MONITOR_THRESHOLD = int(YAML_CONFIG.get("order_monitor_threshold", 1) or 1)
 CANCEL_MONITOR_THRESHOLD = int(YAML_CONFIG.get("cancel_monitor_threshold", 1) or 1)
 
-# 市场状态错误测试配置
+
 REST_TEST_SYMBOL = YAML_CONFIG.get("rest_test_symbol", "LC2607")
 REST_TEST_PRICE = float(YAML_CONFIG.get("rest_test_price", 168220))
 
-# 从 YAML 读取风控阈值
-RISK_THRESHOLDS = YAML_CONFIG.get("risk_thresholds", {
-    "max_order_count": 5,
-    "max_cancel_count": 5,
-    "max_symbol_order_count": 2
-})
+
+RISK_THRESHOLDS = YAML_CONFIG.get(
+    "risk_thresholds",
+    {
+        "max_order_count": 5,
+        "max_cancel_count": 5,
+        "max_symbol_order_count": 2,
+    },
+)
