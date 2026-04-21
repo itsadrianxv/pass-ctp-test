@@ -1,243 +1,227 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-bs-theme="light">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CTP Workspace | CTP 穿透测试</title>
+    <script>
+        (() => {
+            const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            const getSystemTheme = () => themeMedia.matches ? 'dark' : 'light';
+            const applyTheme = (nextTheme) => {
+                document.documentElement.setAttribute('data-bs-theme', nextTheme);
+            };
+
+            window.__ctpTheme = {
+                media: themeMedia,
+                getSystemTheme,
+                applyTheme,
+            };
+
+            const nextTheme = getSystemTheme();
+            applyTheme(nextTheme);
+            document.documentElement.setAttribute('data-bs-theme', nextTheme);
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
 </head>
 <body class="dashboard-page">
     <div class="app-shell">
-        <div class="workspace-grid">
-            <aside class="page-panel ops-rail">
-                <div class="brand-block">
-                    <p class="eyebrow">CTP Workspace</p>
-                    <h1>CTP 穿透测试</h1>
-                    <p>把环境、统计和动作收束成一个清爽的浅色工作区，原有测试顺序、接口和事件保持不变。</p>
+        <div id="workspace-grid" class="workspace-grid" data-rail-state="expanded" data-mobile-open="false">
+            <aside id="ops-rail" class="ops-rail" aria-label="控制台侧边栏">
+                <div class="rail-head">
+                    <div class="brand-block">
+                        <h1>CTP 穿透测试</h1>
+                    </div>
+                    <button id="rail-toggle" class="rail-toggle" type="button" aria-expanded="true" aria-controls="ops-rail" aria-label="收起侧边栏">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
                 </div>
 
-                <section class="rail-panel">
-                    <div class="panel-header">
-                        <p class="panel-kicker">当前环境</p>
+                <div class="rail-scroll">
+                    <section class="rail-group">
                         <h2 class="panel-title">{{ env.CTP_NAME }}</h2>
-                    </div>
-                    <div class="env-list">
-                        <div class="env-row">
-                            <span class="env-label">账户</span>
-                            <span class="env-value">{{ env.CTP_USERNAME }}</span>
+                        <div class="info-list">
+                            <div class="info-row">
+                                <span class="info-label">账户</span>
+                                <span class="info-value">{{ env.CTP_USERNAME }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">交易服务器</span>
+                                <span class="info-value" title="{{ env.CTP_TD_SERVER }}">{{ env.CTP_TD_SERVER }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">行情服务器</span>
+                                <span class="info-value" title="{{ env.CTP_MD_SERVER }}">{{ env.CTP_MD_SERVER }}</span>
+                            </div>
                         </div>
-                        <div class="env-row">
-                            <span class="env-label">交易服务器</span>
-                            <span class="env-value" title="{{ env.CTP_TD_SERVER }}">{{ env.CTP_TD_SERVER }}</span>
-                        </div>
-                        <div class="env-row">
-                            <span class="env-label">行情服务器</span>
-                            <span class="env-value" title="{{ env.CTP_MD_SERVER }}">{{ env.CTP_MD_SERVER }}</span>
-                        </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section class="rail-panel">
-                    <div class="panel-header">
-                        <p class="panel-kicker">实时统计</p>
+                    <section class="rail-group">
                         <h2 class="panel-title">风险计数</h2>
-                    </div>
-                    <div class="metric-list">
-                        <div class="metric-row">
-                            <span class="metric-label">报单笔数</span>
-                            <span class="metric-value" id="metric-order">-</span>
+                        <div class="metric-list">
+                            <div class="metric-row">
+                                <span class="metric-label">报单笔数</span>
+                                <span class="metric-value" id="metric-order">-</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">撤单笔数</span>
+                                <span class="metric-value" id="metric-cancel">-</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">重复报单(选测)</span>
+                                <span class="metric-value" id="metric-repeat">-</span>
+                            </div>
                         </div>
-                        <div class="metric-row">
-                            <span class="metric-label">撤单笔数</span>
-                            <span class="metric-value" id="metric-cancel">-</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label">重复报单(选测)</span>
-                            <span class="metric-value" id="metric-repeat">-</span>
-                        </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section class="rail-panel rail-tests">
-                    <div class="panel-header">
-                        <p class="panel-kicker">测试入口</p>
-                        <h2 class="panel-title">六组用例</h2>
-                    </div>
+                    <section class="rail-group rail-tests">
+                        <div class="accordion rail-accordion" id="testAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c21" aria-expanded="true" aria-controls="c21">
+                                        2.1 接口适应性
+                                    </button>
+                                </h2>
+                                <div id="c21" class="accordion-collapse collapse show" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.1.1')" class="btn btn-outline-light btn-sm w-100">连通性测试</button>
+                                            <button onclick="openTestConfigModal()" class="btn btn-outline-secondary btn-sm w-100">设置测试参数</button>
+                                            <button onclick="runTest('2.1.2.1')" class="btn btn-outline-light btn-sm w-100">开仓测试</button>
+                                            <button onclick="runTest('2.1.2.2')" class="btn btn-outline-light btn-sm w-100">平仓测试</button>
+                                            <button onclick="runTest('2.1.2.3')" class="btn btn-outline-light btn-sm w-100">撤单测试</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div class="accordion rail-accordion" id="testAccordion">
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c21" aria-expanded="true" aria-controls="c21">
-                                    2.1 接口适应性
-                                </button>
-                            </h2>
-                            <div id="c21" class="accordion-collapse collapse show" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.1.1')" class="btn btn-outline-light btn-sm w-100">连通性测试</button>
-                                        <button onclick="openTestConfigModal()" class="btn btn-outline-secondary btn-sm w-100">设置测试参数</button>
-                                        <button onclick="runTest('2.1.2.1')" class="btn btn-outline-light btn-sm w-100">开仓测试</button>
-                                        <button onclick="runTest('2.1.2.2')" class="btn btn-outline-light btn-sm w-100">平仓测试</button>
-                                        <button onclick="runTest('2.1.2.3')" class="btn btn-outline-light btn-sm w-100">撤单测试</button>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c22" aria-expanded="false" aria-controls="c22">
+                                        2.2 异常监测
+                                    </button>
+                                </h2>
+                                <div id="c22" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.2.1.1')" class="btn btn-outline-light btn-sm w-100">连接状态监测</button>
+                                            <button onclick="runTest('2.2.1.2')" class="btn btn-outline-light btn-sm w-100">断线模拟</button>
+                                            <button onclick="runTest('2.2.1.3')" class="btn btn-outline-light btn-sm w-100">重连模拟</button>
+                                        </div>
+                                        <hr class="action-divider">
+                                        <div class="action-stack">
+                                            <button onclick="openRepeatMonitorConfigModal()" class="btn btn-outline-secondary btn-sm w-100">设置重复报单监测阈值</button>
+                                            <button onclick="runTest('2.2.3.1')" class="btn btn-outline-light btn-sm w-100">重复报单监测(开)</button>
+                                            <button onclick="runTest('2.2.3.2')" class="btn btn-outline-light btn-sm w-100">重复报单监测(平)</button>
+                                            <button onclick="runTest('2.2.3.3')" class="btn btn-outline-light btn-sm w-100">重复报单监测(撤)</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c23" aria-expanded="false" aria-controls="c23">
+                                        2.3 阈值管理
+                                    </button>
+                                </h2>
+                                <div id="c23" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-stack">
+                                            <button onclick="openThresholdModal()" class="btn btn-outline-secondary btn-sm w-100">设置阈值</button>
+                                            <button onclick="runTest('2.3.1.1')" class="btn btn-outline-light btn-sm w-100">报单统计与阈值预警</button>
+                                            <button onclick="runTest('2.3.1.3')" class="btn btn-outline-light btn-sm w-100">撤单统计与阈值预警</button>
+                                            <button onclick="runTest('2.3.1.5')" class="btn btn-outline-light btn-sm w-100">重复报单预警</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c24" aria-expanded="false" aria-controls="c24">
+                                        2.4 错误防范
+                                    </button>
+                                </h2>
+                                <div id="c24" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.4.1.1')" class="btn btn-outline-light btn-sm w-100">合约代码错误</button>
+                                            <button onclick="runTest('2.4.1.2')" class="btn btn-outline-light btn-sm w-100">价格错误</button>
+                                            <button onclick="openVolumeLimitModal()" class="btn btn-outline-secondary btn-sm w-100">数量超限</button>
+                                        </div>
+                                        <hr class="action-divider">
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.4.2.1')" class="btn btn-outline-light btn-sm w-100">资金不足提示</button>
+                                            <button onclick="runTest('2.4.2.2')" class="btn btn-outline-light btn-sm w-100">持仓不足提示</button>
+                                            <button onclick="runTest('2.4.2.3')" class="btn btn-outline-light btn-sm w-100">市场状态错误</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c25" aria-expanded="false" aria-controls="c25">
+                                        2.5 应急处理
+                                    </button>
+                                </h2>
+                                <div id="c25" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-caption">常规动作</div>
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.5.1.1')" class="btn btn-outline-light btn-sm w-100">限制交易权限</button>
+                                            <button onclick="runTest('2.5.1.2')" class="btn btn-outline-light btn-sm w-100">暂停策略执行</button>
+                                        </div>
+                                        <hr class="action-divider">
+                                        <div class="action-caption action-caption-danger">危险动作</div>
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.5.1.3')" class="btn btn-danger btn-sm w-100">强制账号退出</button>
+                                            <button onclick="runTest('2.5.2.1')" class="btn btn-outline-light btn-sm w-100">撤销部分成交</button>
+                                            <button onclick="runTest('2.5.2.2')" class="btn btn-outline-light btn-sm w-100">批量撤销所有</button>
+                                        </div>
+                                        <hr class="action-divider">
+                                        <div class="action-caption action-caption-success">恢复动作</div>
+                                        <div class="action-stack">
+                                            <button onclick="resetSystem()" class="btn btn-success btn-sm w-100">重置 / 恢复交易权限</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c26" aria-expanded="false" aria-controls="c26">
+                                        2.6 日志记录
+                                    </button>
+                                </h2>
+                                <div id="c26" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
+                                    <div class="accordion-body">
+                                        <div class="action-stack">
+                                            <button onclick="runTest('2.6.1')" class="btn btn-outline-light btn-sm w-100">日志记录功能</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c22" aria-expanded="false" aria-controls="c22">
-                                    2.2 异常监测
-                                </button>
-                            </h2>
-                            <div id="c22" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.2.1.1')" class="btn btn-outline-light btn-sm w-100">连接状态监测</button>
-                                        <button onclick="runTest('2.2.1.2')" class="btn btn-outline-light btn-sm w-100">断线模拟</button>
-                                        <button onclick="runTest('2.2.1.3')" class="btn btn-outline-light btn-sm w-100">重连模拟</button>
-                                    </div>
-                                    <hr class="action-divider">
-                                    <div class="action-stack">
-                                        <button onclick="openRepeatMonitorConfigModal()" class="btn btn-outline-secondary btn-sm w-100">设置重复报单监测阈值</button>
-                                        <button onclick="runTest('2.2.3.1')" class="btn btn-outline-light btn-sm w-100">重复报单监测(开)</button>
-                                        <button onclick="runTest('2.2.3.2')" class="btn btn-outline-light btn-sm w-100">重复报单监测(平)</button>
-                                        <button onclick="runTest('2.2.3.3')" class="btn btn-outline-light btn-sm w-100">重复报单监测(撤)</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c23" aria-expanded="false" aria-controls="c23">
-                                    2.3 阈值管理
-                                </button>
-                            </h2>
-                            <div id="c23" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-stack">
-                                        <button onclick="openThresholdModal()" class="btn btn-outline-secondary btn-sm w-100">设置阈值</button>
-                                        <button onclick="runTest('2.3.1.1')" class="btn btn-outline-light btn-sm w-100">报单统计与阈值预警</button>
-                                        <button onclick="runTest('2.3.1.3')" class="btn btn-outline-light btn-sm w-100">撤单统计与阈值预警</button>
-                                        <button onclick="runTest('2.3.1.5')" class="btn btn-outline-light btn-sm w-100">重复报单预警</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c24" aria-expanded="false" aria-controls="c24">
-                                    2.4 错误防范
-                                </button>
-                            </h2>
-                            <div id="c24" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.4.1.1')" class="btn btn-outline-light btn-sm w-100">合约代码错误</button>
-                                        <button onclick="runTest('2.4.1.2')" class="btn btn-outline-light btn-sm w-100">价格错误</button>
-                                        <button onclick="openVolumeLimitModal()" class="btn btn-outline-secondary btn-sm w-100">数量超限</button>
-                                    </div>
-                                    <hr class="action-divider">
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.4.2.1')" class="btn btn-outline-light btn-sm w-100">资金不足提示</button>
-                                        <button onclick="runTest('2.4.2.2')" class="btn btn-outline-light btn-sm w-100">持仓不足提示</button>
-                                        <button onclick="runTest('2.4.2.3')" class="btn btn-outline-light btn-sm w-100">市场状态错误</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c25" aria-expanded="false" aria-controls="c25">
-                                    2.5 应急处理
-                                </button>
-                            </h2>
-                            <div id="c25" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-caption">常规动作</div>
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.5.1.1')" class="btn btn-outline-light btn-sm w-100">限制交易权限</button>
-                                        <button onclick="runTest('2.5.1.2')" class="btn btn-outline-light btn-sm w-100">暂停策略执行</button>
-                                    </div>
-                                    <hr class="action-divider">
-                                    <div class="action-caption action-caption-danger">危险动作</div>
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.5.1.3')" class="btn btn-danger btn-sm w-100">强制账号退出</button>
-                                        <button onclick="runTest('2.5.2.1')" class="btn btn-outline-light btn-sm w-100">撤销部分成交</button>
-                                        <button onclick="runTest('2.5.2.2')" class="btn btn-outline-light btn-sm w-100">批量撤销所有</button>
-                                    </div>
-                                    <hr class="action-divider">
-                                    <div class="action-caption action-caption-success">恢复动作</div>
-                                    <div class="action-stack">
-                                        <button onclick="resetSystem()" class="btn btn-success btn-sm w-100">重置 / 恢复交易权限</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c26" aria-expanded="false" aria-controls="c26">
-                                    2.6 日志记录
-                                </button>
-                            </h2>
-                            <div id="c26" class="accordion-collapse collapse" data-bs-parent="#testAccordion">
-                                <div class="accordion-body">
-                                    <div class="action-stack">
-                                        <button onclick="runTest('2.6.1')" class="btn btn-outline-light btn-sm w-100">日志记录功能</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                </div>
             </aside>
 
             <main class="terminal-workspace">
-                <section class="page-panel status-bar">
-                    <div class="status-cluster">
-                        <div class="status-chip">
-                            <span class="status-chip-label">Socket</span>
-                            <span class="status-chip-value" id="socket-state" data-state="offline">未连接</span>
-                        </div>
-                        <div class="status-chip">
-                            <span class="status-chip-label">Worker</span>
-                            <span class="status-chip-value" id="worker-state">未知</span>
-                        </div>
-                        <div class="status-chip">
-                            <span class="status-chip-label">当前用例</span>
-                            <span class="status-chip-value" id="current-case">空闲</span>
-                        </div>
-                        <div class="status-chip">
-                            <span class="status-chip-label">风控</span>
-                            <span class="status-chip-value" id="risk-active-state">-</span>
-                        </div>
-                        <div class="status-chip">
-                            <span class="status-chip-label">最近结束</span>
-                            <span class="status-chip-value" id="last-case-finished">-</span>
-                        </div>
-                    </div>
-                    <div class="status-side">
-                        <span class="status-side-label">最近状态</span>
-                        <span class="status-side-value" id="worker-last-error">等待 Worker 状态...</span>
-                    </div>
-                </section>
+                <button id="mobile-rail-toggle" class="mobile-rail-toggle" type="button" aria-expanded="false" aria-controls="ops-rail">
+                    菜单
+                </button>
 
-                <section class="page-panel terminal-panel">
+                <section class="terminal-panel">
                     <div class="terminal-header">
                         <div>
-                            <p class="panel-kicker">主终端</p>
                             <h2 class="terminal-title">执行日志</h2>
-                        </div>
-                        <div class="terminal-meta">
-                            <div class="terminal-meta-item">环境 <strong>{{ env.CTP_NAME }}</strong></div>
-                            <div class="terminal-meta-item">网关 <span id="gateway-state">待确认</span></div>
-                            <div class="terminal-meta-item">日志行数 <span id="log-line-count">1</span></div>
                         </div>
                     </div>
                     <div id="log-container">
@@ -423,6 +407,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const socket = io();
+        const railStorageKey = 'ctp_workspace_rail_state';
+        const workspaceGrid = document.getElementById('workspace-grid');
+        const railToggle = document.getElementById('rail-toggle');
+        const mobileRailToggle = document.getElementById('mobile-rail-toggle');
         const logContainer = document.getElementById('log-container');
         const toastContainer = document.getElementById('toast-container');
 
@@ -469,17 +457,6 @@
             volume: document.getElementById('volerr-volume'),
         };
 
-        const statusElements = {
-            socket: document.getElementById('socket-state'),
-            worker: document.getElementById('worker-state'),
-            currentCase: document.getElementById('current-case'),
-            risk: document.getElementById('risk-active-state'),
-            lastFinished: document.getElementById('last-case-finished'),
-            gateway: document.getElementById('gateway-state'),
-            lastError: document.getElementById('worker-last-error'),
-            lineCount: document.getElementById('log-line-count'),
-        };
-
         let thresholdModal;
         let volumeLimitModal;
         let testConfigModal;
@@ -488,6 +465,20 @@
 
         let lastToastKey = '';
         let lastToastAt = 0;
+
+        function applyRailState(nextState) {
+            const safeState = nextState === 'collapsed' ? 'collapsed' : 'expanded';
+            workspaceGrid.dataset.railState = safeState;
+            railToggle.setAttribute('aria-expanded', String(safeState === 'expanded'));
+            railToggle.setAttribute('aria-label', safeState === 'expanded' ? '收起侧边栏' : '展开侧边栏');
+            localStorage.setItem(railStorageKey, safeState);
+        }
+
+        function setMobileRailOpen(isOpen) {
+            const nextOpen = Boolean(isOpen);
+            workspaceGrid.dataset.mobileOpen = nextOpen ? 'true' : 'false';
+            mobileRailToggle.setAttribute('aria-expanded', String(nextOpen));
+        }
 
         function setText(el, value, fallback = '-') {
             if (!el) return;
@@ -512,9 +503,7 @@
         }
 
         function updateLogCount() {
-            if (statusElements.lineCount) {
-                statusElements.lineCount.textContent = String(logContainer.children.length);
-            }
+            return logContainer.children.length;
         }
 
         function isNearLogBottom() {
@@ -598,7 +587,7 @@
 
             const closeButton = document.createElement('button');
             closeButton.type = 'button';
-            closeButton.className = 'btn-close btn-close-white ms-2';
+            closeButton.className = 'btn-close ms-2';
             closeButton.setAttribute('data-bs-dismiss', 'toast');
             closeButton.setAttribute('aria-label', 'Close');
 
@@ -650,39 +639,14 @@
                 metrics.cancel.textContent = metric.cancel_count ?? '-';
                 metrics.repeat.textContent = metric.repeat_total ?? '-';
             }
-
-            if (risk && Object.prototype.hasOwnProperty.call(risk, 'active')) {
-                const active = Boolean(risk.active);
-                setState(statusElements.risk, active ? '已启用' : '已暂停', active ? 'enabled' : 'disabled');
-            }
         }
 
         function renderWorkerStatus(data) {
             if (!data) return;
 
-            const workerBusy = Boolean(data.busy);
-            const workerOnline = data.state === 'RUNNING';
-            const workerText = workerBusy ? '忙碌' : workerOnline ? '在线' : (data.state || '未知');
-            setState(statusElements.worker, workerText, workerBusy ? 'busy' : workerOnline ? 'online' : 'offline');
-
-            const currentCase = data.current_case_id || '空闲';
-            setState(statusElements.currentCase, currentCase, data.current_case_id ? 'busy' : 'online');
-            setText(statusElements.lastFinished, formatDateTime(data.last_case_finished_at), '-');
-            setState(statusElements.gateway, data.gateway_exists ? '已就绪' : '未就绪', data.gateway_exists ? 'ready' : 'error');
-
-            if (data.last_error) {
-                setState(statusElements.lastError, `最近错误: ${data.last_error}`, 'error', '等待 Worker 状态...');
-            } else {
-                setState(statusElements.lastError, '最近状态正常', 'ok', '等待 Worker 状态...');
-            }
-
             if (data.risk) {
                 updateSnapshot(data.risk);
             }
-        }
-
-        function renderSocketState(connected) {
-            setState(statusElements.socket, connected ? '已连接' : '未连接', connected ? 'online' : 'offline');
         }
 
         function loadThresholdsFromServer() {
@@ -1054,7 +1018,6 @@
         });
 
         socket.on('connect', () => {
-            renderSocketState(true);
             addSystemEvent('服务器已连接', 'online', true);
             loadThresholdsFromServer();
             loadSnapshot();
@@ -1069,7 +1032,6 @@
         });
 
         socket.on('disconnect', () => {
-            renderSocketState(false);
             addSystemEvent('与服务器连接已断开', 'offline');
         });
 
@@ -1077,15 +1039,7 @@
             renderWorkerStatus(data);
         });
 
-        socket.on('case_started', (data) => {
-            setState(statusElements.worker, '忙碌', 'busy');
-            setState(statusElements.currentCase, data && data.case_id ? data.case_id : '执行中', 'busy');
-        });
-
         socket.on('case_finished', () => {
-            setState(statusElements.worker, '在线', 'online');
-            setState(statusElements.currentCase, '空闲', 'online');
-            setText(statusElements.lastFinished, formatDateTime(Date.now() / 1000), '-');
             refreshWorkerStatus();
         });
 
@@ -1095,6 +1049,7 @@
             const testEl = document.getElementById('testConfigModal');
             const repeatEl = document.getElementById('repeatMonitorConfigModal');
             const orderCancelEl = document.getElementById('orderCancelMonitorConfigModal');
+            const storedRailState = localStorage.getItem(railStorageKey);
 
             if (thresholdEl) thresholdModal = new bootstrap.Modal(thresholdEl);
             if (volumeEl) volumeLimitModal = new bootstrap.Modal(volumeEl);
@@ -1103,11 +1058,34 @@
             if (orderCancelEl) orderCancelMonitorConfigModal = new bootstrap.Modal(orderCancelEl);
 
             thresholdInputs.repeatEnabled.addEventListener('change', syncRepeatThresholdState);
+            railToggle.addEventListener('click', () => {
+                const nextState = workspaceGrid.dataset.railState === 'collapsed' ? 'expanded' : 'collapsed';
+                applyRailState(nextState);
+                setMobileRailOpen(false);
+            });
+            mobileRailToggle.addEventListener('click', () => {
+                const isOpen = workspaceGrid.dataset.mobileOpen === 'true';
+                setMobileRailOpen(!isOpen);
+            });
+
+            if (storedRailState === 'collapsed') {
+                applyRailState('collapsed');
+            } else {
+                applyRailState('expanded');
+            }
+
             syncRepeatThresholdState();
-            renderSocketState(false);
             refreshWorkerStatus();
             loadSnapshot();
             updateLogCount();
+
+            if (window.__ctpTheme && window.__ctpTheme.media) {
+                window.__ctpTheme.media.addEventListener('change', (event) => {
+                    const nextTheme = event.matches ? 'dark' : 'light';
+                    window.__ctpTheme.applyTheme(nextTheme);
+                    document.documentElement.setAttribute('data-bs-theme', nextTheme);
+                });
+            }
         });
 
         function runTest(caseId) {
@@ -1119,8 +1097,6 @@
                         return;
                     }
 
-                    setState(statusElements.worker, '忙碌', 'busy');
-                    setState(statusElements.currentCase, caseId, 'busy');
                     refreshWorkerStatus();
                 });
         }

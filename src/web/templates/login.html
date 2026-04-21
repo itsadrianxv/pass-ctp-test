@@ -1,52 +1,42 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-bs-theme="light">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CTP Workspace | 登录</title>
+    <title>CTP 穿透测试 | 登录</title>
+    <script>
+        (() => {
+            const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            const getSystemTheme = () => themeMedia.matches ? 'dark' : 'light';
+            const applyTheme = (nextTheme) => {
+                document.documentElement.setAttribute('data-bs-theme', nextTheme);
+            };
+
+            window.__ctpTheme = {
+                media: themeMedia,
+                getSystemTheme,
+                applyTheme,
+            };
+
+            const nextTheme = getSystemTheme();
+            applyTheme(nextTheme);
+            document.documentElement.setAttribute('data-bs-theme', nextTheme);
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="login-page">
     <main class="login-layout">
-        <section class="page-panel login-panel login-side">
-            <div class="login-brand">
-                <p class="eyebrow">CTP Workspace</p>
-                <h1>CTP 穿透测试接入</h1>
-                <p>把接入参数整理在一个清爽的浅色工作台里，保留现有接口、字段名和后端逻辑不变。</p>
-            </div>
-
-            <div class="login-side-grid">
-                <div class="login-side-item">
-                    <strong>账户凭证</strong>
-                    <span class="subtle-copy">公司名称、BrokerID、账号与密码集中录入，信息更连贯。</span>
-                </div>
-                <div class="login-side-item">
-                    <strong>连接地址</strong>
-                    <span class="subtle-copy">交易服务器与行情服务器分开呈现，长地址保留单列节奏。</span>
-                </div>
-                <div class="login-side-item">
-                    <strong>应用认证</strong>
-                    <span class="subtle-copy">AppID、授权码和产品信息保留原字段，便于回填与复用。</span>
-                </div>
-            </div>
-        </section>
-
-        <section class="page-panel login-panel login-form-panel">
+        <section class="login-form-panel">
             <div class="login-form-header">
                 <div>
-                    <p class="section-kicker">接入参数</p>
-                    <h2>登录与连接</h2>
+                    <h2>CTP 穿透测试接入</h2>
                 </div>
-                <p class="section-note"><code>POST /login</code> 与全部原有表单 <code>name</code> 字段保持不变。</p>
             </div>
 
             <form method="POST" action="/login" class="login-form">
                 <section class="form-section">
-                    <div class="form-section-header">
-                        <h3>账户凭证</h3>
-                        <span class="helper-text">短字段双列，便于快速核对。</span>
-                    </div>
                     <div class="form-grid">
                         <div class="field-group field-span-full">
                             <label class="form-label" for="ctp-name">期货公司名称</label>
@@ -68,10 +58,6 @@
                 </section>
 
                 <section class="form-section">
-                    <div class="form-section-header">
-                        <h3>连接地址</h3>
-                        <span class="helper-text">服务器地址保持单列，避免长串截断。</span>
-                    </div>
                     <div class="form-grid">
                         <div class="field-group field-span-full">
                             <label class="form-label" for="ctp-td-server">交易服务器 (TD Server)</label>
@@ -85,10 +71,6 @@
                 </section>
 
                 <section class="form-section">
-                    <div class="form-section-header">
-                        <h3>应用认证</h3>
-                        <span class="helper-text">保留原字段语义与必填校验。</span>
-                    </div>
                     <div class="form-grid">
                         <div class="field-group">
                             <label class="form-label" for="appid">AppID</label>
@@ -106,11 +88,19 @@
                 </section>
 
                 <div class="login-actions">
-                    <span class="helper-text">登录后将沿用现有 worker 重启与配置回填流程。</span>
                     <button type="submit" class="btn btn-primary">连接 / 登录</button>
                 </div>
             </form>
         </section>
     </main>
+    <script>
+        if (window.__ctpTheme && window.__ctpTheme.media) {
+            window.__ctpTheme.media.addEventListener('change', (event) => {
+                const nextTheme = event.matches ? 'dark' : 'light';
+                window.__ctpTheme.applyTheme(nextTheme);
+                document.documentElement.setAttribute('data-bs-theme', nextTheme);
+            });
+        }
+    </script>
 </body>
 </html>

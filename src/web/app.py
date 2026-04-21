@@ -19,6 +19,7 @@ import engineio
 engineio.payload.Payload.max_decode_packets = 100
 
 def _load_socketio_cors_allowed_origins():
+    """读取 SocketIO 的跨域白名单。"""
     raw_value = os.environ.get("WEB_CORS_ALLOWED_ORIGINS", "").strip()
     if not raw_value:
         return None
@@ -27,14 +28,23 @@ def _load_socketio_cors_allowed_origins():
     return [item.strip() for item in raw_value.split(",") if item.strip()]
 
 
+def _allow_unsafe_werkzeug() -> bool:
+    """读取本地启动时是否允许 Werkzeug。"""
+    raw_value = os.environ.get("WEB_ALLOW_UNSAFE_WERKZEUG", "true").strip().lower()
+    return raw_value not in {"0", "false", "no", "off"}
+
+
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=config.get_web_secret_key(),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("WEB_SESSION_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+    TEMPLATES_AUTO_RELOAD=True,
+    SEND_FILE_MAX_AGE_DEFAULT=0,
 )
 socketio = SocketIO(app, cors_allowed_origins=_load_socketio_cors_allowed_origins(), async_mode='threading')
+app.jinja_env.auto_reload = True
 
 setup_logger()
 
@@ -417,4 +427,10 @@ def worker_kill():
 if __name__ == '__main__':
     web_host = os.environ.get("WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
     web_port = int(os.environ.get("WEB_PORT", "5006"))
-    socketio.run(app, host=web_host, port=web_port, debug=False)
+    socketio.run(
+        app,
+        host=web_host,
+        port=web_port,
+        debug=False,
+        allow_unsafe_werkzeug=_allow_unsafe_werkzeug(),
+    )
