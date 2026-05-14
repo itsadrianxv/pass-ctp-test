@@ -106,7 +106,7 @@ pip install -r requirements.txt
 启动 Web 控制台：
 
 ```bash
-python src/web/app.py
+python src/app/web/main.py
 ```
 
 浏览器访问 `http://localhost:5006`，点击相应的测试按钮即可开始执行测试用例。
@@ -268,5 +268,4 @@ sha256sum 程序启动文件 > ArgusReport_yyyymmdd_HHMMSS.dat
 ```
 
 > 时间戳按实际执行时间替换即可。
-
 
