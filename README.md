@@ -1,8 +1,14 @@
 # pass-ctp-test —— 速通CTP穿透测试
 
-## 项目综述
+<div align="center">
+  <h3>本项目为期货公司 <strong>CTP 穿透测试</strong> 设计</h3>
+  <p>
+    初衷是减少大家花费在 <strong>CTP 测试</strong> 上的时间<br>
+    把宝贵时间留给关键系统开发
+  </p>
+</div>
 
-本项目专为期货公司 **CTP 穿透测试** 需求设计，旨在帮助开发者和交易员快速通过CTP穿透测试。工具基于 `vnpy` 框架开发，提供了一套自动化的测试用例集，覆盖了穿透测试报告中要求的关键测试点，包括连通性测试、基础交易功能、异常监测、风控阈值管理及应急处理功能。
+- 基于 `vnpy` 框架开发，提供了一套自动化的测试用例集，覆盖了穿透测试报告中要求的关键测试点，包括连通性测试、基础交易功能、异常监测、风控阈值管理及应急处理功能。
 
 通过本项目，您可以：
 - 快速执行标准化的穿透测试流程。
@@ -39,43 +45,39 @@
 │
 └── src/
     ├── __init__.py
-    ├── path_setup.py          # sys.path 注入唯一来源
+    ├── app/                   # 应用入口
+    │   ├── web/               # Web 控制台
+    │   │   ├── factory.py     # Flask 应用工厂
+    │   │   ├── main.py        # Web 入口
+    │   │   ├── process_manager.py
+    │   │   ├── static/
+    │   │   └── templates/
+    │   └── worker/            # Worker 子进程
+    │       ├── controller.py  # MainEngine/TestApp 初始化和任务调度
+    │       ├── main.py        # Worker 入口
+    │       ├── rpc_handlers.py
+    │       └── status.py
     │
     ├── config/                # 配置加载
     │   ├── __init__.py
-    │   └── reader.py          # .env / config.yaml 读写、全局常量
+    │   ├── settings.py        # .env / config.yaml 读写、全局常量
+    │   └── yaml.py            # YAML 配置持久化
     │
-    ├── logging/               # 日志系统
+    ├── domain/                # CTP 测试业务域
     │   ├── __init__.py
-    │   ├── setup.py           # 日志初始化、log_info / log_warning / log_error
-    │   ├── color.py           # 统一日志颜色分配函数
-    │   └── handlers.py        # SocketIOHandler / QueueLogHandler
-    │
-    ├── core/                  # 交易核心
-    │   ├── __init__.py
-    │   ├── engine.py          # TestEngine（CTP 连接、报单、撤单、事件处理）
+    │   ├── app.py             # vn.py TestApp 壳
+    │   ├── engine.py          # TestEngine function engine
     │   ├── risk.py            # 风控管理器
-    │   └── server.py          # RPC 命令服务器
+    │   └── cases/             # CTP 穿透测试用例
     │
-    ├── worker/                # Worker 子进程
-    │   ├── __init__.py
-    │   └── controller.py      # WorkerController + main()
-    │
-    ├── ctp_cases/             # CTP 穿透测试用例
-    │   ├── __init__.py
-    │   ├── cases.py           # 30+ 测试用例函数
-    │   └── helpers.py         # wait_for_reaction / clean_environment
-    │
-    └── web/                   # Web 控制台
+    └── infra/                 # 基础设施
         ├── __init__.py
-        ├── app.py             # Flask 路由 + SocketIO 事件
-        ├── process_manager.py # Worker 进程管理
-        ├── rpc_client.py      # JSON-over-TCP RPC 客户端
-        ├── static/css/style.css
-        └── templates/
-            ├── index.html
-            └── login.html
+        ├── logging/           # 日志系统
+        ├── path_setup.py      # sys.path 注入唯一来源
+        └── rpc/               # JSON-over-TCP RPC
 ```
+
+架构入口遵循 vn.py 语义：`Worker/Web/RPC -> MainEngine -> CtptestGateway + TestApp/TestEngine`。
 
 ## 2. 快速开始
 
@@ -268,4 +270,3 @@ sha256sum 程序启动文件 > ArgusReport_yyyymmdd_HHMMSS.dat
 ```
 
 > 时间戳按实际执行时间替换即可。
-
