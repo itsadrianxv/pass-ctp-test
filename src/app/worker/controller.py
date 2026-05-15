@@ -6,12 +6,16 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 import src.infra.path_setup  # noqa: F401
+from vnpy.event import EventEngine
+from vnpy.trader.engine import MainEngine
+from vnpy_ctptest import CtptestGateway
+
 from src.app.worker.notifier import WorkerNotifier
 from src.app.worker.rpc_handlers import handle_rpc_request as dispatch_rpc_request
 from src.app.worker.status import get_risk_snapshot as build_risk_snapshot
 from src.app.worker.status import get_status as build_status
 from src.domain.cases.registry import CASE_MAP
-from src.domain.engine import TestEngine
+from src.domain.app import TestApp
 from src.infra.logging import log_error, log_info
 
 
@@ -21,7 +25,10 @@ class WorkerController:
     def __init__(self, web_socketio_url: str = "http://127.0.0.1:5006"):
         """初始化 Worker 控制器。"""
         self.web_socketio_url = web_socketio_url
-        self.engine = TestEngine()
+        self.event_engine = EventEngine()
+        self.main_engine = MainEngine(self.event_engine)
+        self.main_engine.add_gateway(CtptestGateway)
+        self.engine = self.main_engine.add_app(TestApp)  # 由 WorkerController 持有 MainEngine
         self.engine.connect()
 
         self.executor = ThreadPoolExecutor(max_workers=1)
@@ -29,6 +36,7 @@ class WorkerController:
         self.current_case_id = None
         self.last_error = None
         self.last_case_finished_at = None
+        self.stopped = False
 
         self.notifier = WorkerNotifier(self, web_socketio_url)
         self.notifier.start()
@@ -107,6 +115,8 @@ class WorkerController:
 
     def reconnect(self) -> None:
         """重连交易连接。"""
+        if self.engine.gateway_name not in self.main_engine.gateways:
+            self.main_engine.add_gateway(CtptestGateway)
         self.engine.reconnect()
 
     def pause(self) -> None:
@@ -115,4 +125,11 @@ class WorkerController:
 
     def stop(self) -> None:
         """停止 Worker 控制器。"""
+        if self.stopped:
+            return
+        self.stopped = True
         self.notifier.stop()
+        if self.engine:
+            self.engine.disconnect()
+        if self.main_engine:
+            self.main_engine.close()

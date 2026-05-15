@@ -16,7 +16,7 @@ def main() -> None:
     controller = None
     server = None
     try:
-        log_info("正在初始化 TestEngine...")
+        log_info("正在初始化 MainEngine/TestApp...")
         controller = WorkerController()
         server = CommandServer(controller)
         server.start()
@@ -26,8 +26,6 @@ def main() -> None:
             log_error("RPC Server 未能成功启动（可能端口被占用），Worker 即将退出。")
             if controller:
                 controller.stop()
-                if controller.engine:
-                    controller.engine.disconnect()
             return
 
         log_info("交易进程就绪，等待指令...")
@@ -50,11 +48,6 @@ def main() -> None:
         try:
             if controller:
                 controller.stop()
-        except Exception:
-            pass
-        try:
-            if controller and controller.engine:
-                controller.engine.disconnect()
         except Exception:
             pass
 
