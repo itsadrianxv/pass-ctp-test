@@ -79,13 +79,13 @@ def handle_rpc_request(controller, req: dict) -> dict:
             accepted = controller.run_case(str(payload.get("case_id", "")))
             return {"request_id": request_id, "ok": True, "data": {"accepted": bool(accepted)}}
         if req_type == "DISCONNECT":
-            controller.engine.disconnect()
+            controller.disconnect()
             return {"request_id": request_id, "ok": True}
         if req_type == "RECONNECT":
-            controller.engine.reconnect()
+            controller.reconnect()
             return {"request_id": request_id, "ok": True}
         if req_type == "PAUSE":
-            controller.engine.pause()
+            controller.pause()
             return {"request_id": request_id, "ok": True}
         return {"request_id": request_id, "ok": False, "error": f"unknown_type: {req_type}"}
     except Exception as exc:

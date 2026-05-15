@@ -1,10 +1,14 @@
 """业务域包入口。"""
 
-__all__ = ["TestEngine", "TestRiskManager"]
+__all__ = ["TestApp", "TestEngine", "TestRiskManager"]
 
 
 def __getattr__(name: str):
     """按需导出业务域对象。"""
+    if name == "TestApp":
+        from src.domain.app import TestApp
+
+        return TestApp
     if name == "TestEngine":
         from src.domain.engine import TestEngine
 

@@ -4,7 +4,8 @@ from src.domain.cases import case_2_1, case_2_2, case_2_3, case_2_4, case_2_5, c
 
 
 CASE_MAP = {
-    "2.1.1": case_2_1.test_2_1_1_connectivity,
+    "2.1.1.1": case_2_1.test_2_1_1_1_normal_connectivity,
+    "2.1.1.2": case_2_1.test_2_1_1_2_abnormal_connectivity,
     "2.1.2.1": case_2_1.test_2_1_2_1_open,
     "2.1.2.2": case_2_1.test_2_1_2_2_close,
     "2.1.2.3": case_2_1.test_2_1_2_3_cancel,
